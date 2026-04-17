@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { DispatchInsert } from '../types';
 
+type FareMode = 'fixed' | 'per_quantity';
+
 interface DispatchFormProps {
   initialData?: Partial<DispatchInsert>;
   onSubmit: (data: DispatchInsert) => Promise<void>;
@@ -34,14 +36,50 @@ const emptyForm: DispatchInsert = {
 export default function DispatchForm({ initialData, onSubmit, submitLabel = 'Save Dispatch', loading = false }: DispatchFormProps) {
   const [form, setForm] = useState<DispatchInsert>({ ...emptyForm, ...initialData });
 
+  // Fare calculation mode: 'fixed' = enter total directly, 'per_quantity' = rate × quantity
+  const [fareMode, setFareMode] = useState<FareMode>('fixed');
+  // Per-quantity fare rate (UI-only, not stored in DB)
+  const [perQuantityRate, setPerQuantityRate] = useState<number | null>(null);
+
   useEffect(() => {
     if (initialData) {
       setForm({ ...emptyForm, ...initialData });
+      // Try to infer fare mode from existing data when editing
+      if (initialData.transport_fare && initialData.quantity && initialData.quantity > 0) {
+        const inferredRate = initialData.transport_fare / initialData.quantity;
+        // If the rate is a reasonable number (not fractionally weird), assume per_quantity mode
+        // But default to fixed since that's the simpler path
+      }
     }
   }, [initialData]);
 
   const set = (field: keyof DispatchInsert, value: string | number | boolean | null) => {
     setForm((prev) => ({ ...prev, [field]: value }));
+  };
+
+  // When in per_quantity mode, auto-calculate transport_fare whenever rate or quantity changes
+  useEffect(() => {
+    if (fareMode === 'per_quantity' && perQuantityRate !== null) {
+      const qty = form.quantity || 0;
+      const calculatedFare = Math.round(perQuantityRate * qty * 100) / 100; // round to 2 decimals
+      setForm((prev) => ({ ...prev, transport_fare: calculatedFare }));
+    }
+  }, [fareMode, perQuantityRate, form.quantity]);
+
+  const handleFareModeChange = (mode: FareMode) => {
+    setFareMode(mode);
+    if (mode === 'fixed') {
+      // Keep the current transport_fare value, clear per-quantity rate
+      setPerQuantityRate(null);
+    } else {
+      // Switching to per_quantity: try to calculate rate from existing fare
+      if (form.transport_fare && form.quantity && form.quantity > 0) {
+        setPerQuantityRate(Math.round((form.transport_fare / form.quantity) * 100) / 100);
+      } else {
+        setPerQuantityRate(null);
+        setForm((prev) => ({ ...prev, transport_fare: null }));
+      }
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -258,18 +296,97 @@ export default function DispatchForm({ initialData, onSubmit, submitLabel = 'Sav
               required
             />
           </div>
-          <div className="form-group">
+
+          {/* Transport Fare — with mode selector */}
+          <div className="form-group" style={{ gridColumn: '1 / -1' }}>
             <label className="form-label">Transport Fare</label>
-            <input
-              type="number"
-              className="form-input"
-              placeholder="0"
-              step="any"
-              value={form.transport_fare ?? ''}
-              onChange={(e) => set('transport_fare', e.target.value ? parseFloat(e.target.value) : null)}
-              required
-            />
+            <div className="fare-mode-selector" style={{ marginBottom: 12 }}>
+              <button
+                type="button"
+                className={`fare-mode-tab ${fareMode === 'fixed' ? 'active' : ''}`}
+                onClick={() => handleFareModeChange('fixed')}
+              >
+                💵 Fixed Total
+              </button>
+              <button
+                type="button"
+                className={`fare-mode-tab ${fareMode === 'per_quantity' ? 'active' : ''}`}
+                onClick={() => handleFareModeChange('per_quantity')}
+              >
+                📦 Per Quantity
+              </button>
+            </div>
+
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: fareMode === 'per_quantity' ? 'repeat(auto-fill, minmax(200px, 1fr))' : '1fr',
+              gap: 12,
+              alignItems: 'end',
+            }}>
+              {fareMode === 'fixed' ? (
+                /* Fixed total fare input */
+                <div>
+                  <label className="form-label" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Total Transport Fare</label>
+                  <input
+                    type="number"
+                    className="form-input"
+                    placeholder="Enter total fare"
+                    step="any"
+                    value={form.transport_fare ?? ''}
+                    onChange={(e) => set('transport_fare', e.target.value ? parseFloat(e.target.value) : null)}
+                    required
+                  />
+                </div>
+              ) : (
+                /* Per-quantity fare inputs */
+                <>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Fare per Unit (Rate)</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      placeholder="Rate per unit"
+                      step="any"
+                      value={perQuantityRate ?? ''}
+                      onChange={(e) => setPerQuantityRate(e.target.value ? parseFloat(e.target.value) : null)}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Quantity</label>
+                    <input
+                      type="number"
+                      className="form-input"
+                      value={form.quantity ?? ''}
+                      disabled
+                      style={{ opacity: 0.6, cursor: 'not-allowed' }}
+                    />
+                  </div>
+                  <div>
+                    <label className="form-label" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>Calculated Fare</label>
+                    <div
+                      className="form-input"
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        background: 'rgba(20, 184, 166, 0.08)',
+                        borderColor: 'rgba(20, 184, 166, 0.25)',
+                        color: 'var(--teal)',
+                        fontWeight: 700,
+                        fontSize: '1rem',
+                      }}
+                    >
+                      Rs. {(form.transport_fare || 0).toLocaleString('en-PK')}
+                    </div>
+                    <div className="fare-calculated-badge">
+                      ✨ {perQuantityRate ?? 0} × {qty} = Rs. {(form.transport_fare || 0).toLocaleString('en-PK')}
+                    </div>
+                  </div>
+                </>
+              )}
+            </div>
           </div>
+
           <div className="form-group">
             <label className="form-label">Other Expenses</label>
             <input

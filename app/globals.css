@@ -480,6 +480,59 @@ body {
   }
 }
 
+/* ============================
+   Fare Mode Selector
+   ============================ */
+.fare-mode-selector {
+  display: flex;
+  background: var(--bg-input);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 3px;
+  gap: 3px;
+}
+
+.fare-mode-tab {
+  flex: 1;
+  padding: 8px 14px;
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-family: var(--font-sans);
+  color: var(--text-muted);
+  background: transparent;
+  border: none;
+  border-radius: calc(var(--radius-md) - 2px);
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  text-align: center;
+  white-space: nowrap;
+}
+
+.fare-mode-tab:hover:not(.active) {
+  color: var(--text-secondary);
+  background: rgba(139, 92, 246, 0.06);
+}
+
+.fare-mode-tab.active {
+  background: var(--gradient-primary);
+  color: white;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.fare-calculated-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  color: var(--teal);
+  background: var(--teal-glow);
+  border: 1px solid rgba(20, 184, 166, 0.2);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+}
+
 /* Profit text colors */
 .text-profit { color: var(--emerald); }
 .text-loss { color: var(--rose); }
